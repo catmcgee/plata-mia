@@ -1,41 +1,105 @@
-'use client';
+"use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { keccak256, parseUnits, toBytes } from "viem";
+
 import { AssetId } from "../types";
+import useStealthVault from "../hooks/useStealthVault";
 
-type SendSectionProps = {
-  onSend: (input: {
-    recipientStealthPublicId: string;
-    assetId: AssetId;
-    amount: number;
-  }) => void;
+type SendFormSubmission = {
+  stealthId: string;
+  stealthIdHex: `0x${string}`;
+  assetId: AssetId;
+  amount: number;
+  direction?: "incoming" | "outgoing";
+  txHash?: `0x${string}`;
 };
 
-const SendSection = ({ onSend }: SendSectionProps) => {
-  const [recipientStealthPublicId, setRecipientStealthPublicId] = useState("");
+type SendSectionProps = {
+  onSend: (input: SendFormSubmission) => void;
+  defaultRecipientStealthId?: string;
+};
+
+const SendSection = ({ onSend, defaultRecipientStealthId }: SendSectionProps) => {
+  const [recipientStealthPublicId, setRecipientStealthPublicId] = useState(
+    defaultRecipientStealthId ?? ""
+  );
   const [assetId, setAssetId] = useState<AssetId>("KSM");
   const [amountInput, setAmountInput] = useState<string>("");
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [txHash, setTxHash] = useState<`0x${string}` | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { depositStealth, isConfigured, vaultAddress, networkLabel } = useStealthVault();
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  useEffect(() => {
+    if (defaultRecipientStealthId !== undefined) {
+      setRecipientStealthPublicId(defaultRecipientStealthId);
+    }
+  }, [defaultRecipientStealthId]);
+
+  const txStatusMessage = useMemo(() => {
+    if (isSubmitting && !txHash) {
+      return "Submitting transaction…";
+    }
+    if (txHash) {
+      return `Tx confirmed: ${txHash.slice(0, 6)}…${txHash.slice(-4)}`;
+    }
+    return null;
+  }, [isSubmitting, txHash]);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setFormError(null);
+    setTxHash(null);
 
     const numericAmount = Number(amountInput);
 
     if (!recipientStealthPublicId || numericAmount <= 0 || Number.isNaN(numericAmount)) {
-      setStatusMessage("Enter a recipient and amount greater than 0.");
+      setFormError("Enter a recipient stealth public ID and an amount greater than 0.");
       return;
     }
 
-    onSend({
-      recipientStealthPublicId,
-      assetId,
-      amount: numericAmount,
-    });
+    if (!vaultAddress || !isConfigured) {
+      setFormError(
+        `StealthVault address not configured for ${networkLabel ?? "this network"}. ` +
+          "Set the NEXT_PUBLIC_STEALTH_VAULT_ADDRESS_* env vars."
+      );
+      return;
+    }
 
-    setRecipientStealthPublicId("");
-    setAmountInput("");
-    setStatusMessage("Stealth payment simulated.");
+    try {
+      setIsSubmitting(true);
+      const stealthIdHex = keccak256(
+        toBytes(`${recipientStealthPublicId}:${Date.now().toString()}`)
+      ) as `0x${string}`;
+      const receiverTag = keccak256(toBytes(recipientStealthPublicId)) as `0x${string}`;
+      const parsedAmount = parseUnits(amountInput, 18);
+
+      const { hash } = await depositStealth({
+        stealthId: stealthIdHex,
+        amount: parsedAmount,
+        receiverTag,
+      });
+
+      setTxHash(hash);
+      setRecipientStealthPublicId("");
+      setAmountInput("");
+
+      onSend({
+        stealthId: recipientStealthPublicId,
+        stealthIdHex,
+        assetId,
+        amount: numericAmount,
+        direction: "incoming",
+        txHash: hash,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to submit stealth payment transaction.";
+      setFormError(message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -43,9 +107,12 @@ const SendSection = ({ onSend }: SendSectionProps) => {
       <header className="section-header">
         <div>
           <p className="eyebrow">Send</p>
-          <h2>Simulated Stealth Transfer</h2>
+          <h2>Stealth Transfer</h2>
         </div>
-        {statusMessage && <span className="status-pill neutral">{statusMessage}</span>}
+        <div className="status-stack">
+          {formError && <span className="status-pill danger">{formError}</span>}
+          {txStatusMessage && <span className="status-pill success">{txStatusMessage}</span>}
+        </div>
       </header>
 
       <form className="form-grid" onSubmit={handleSubmit}>
@@ -72,7 +139,7 @@ const SendSection = ({ onSend }: SendSectionProps) => {
           <input
             type="number"
             min={0}
-            step="0.01"
+            step="0.0001"
             value={amountInput}
             onChange={(event) => setAmountInput(event.target.value)}
             placeholder="0.00"
@@ -80,8 +147,8 @@ const SendSection = ({ onSend }: SendSectionProps) => {
         </label>
 
         <div className="actions-row">
-          <button type="submit" className="primary-button">
-            Send Stealth Payment (Simulated)
+          <button type="submit" className="primary-button" disabled={isSubmitting}>
+            {isSubmitting ? "Sending…" : "Send Stealth Payment"}
           </button>
         </div>
       </form>

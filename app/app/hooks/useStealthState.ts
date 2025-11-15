@@ -1,11 +1,7 @@
 'use client';
 
 import { startTransition, useCallback, useEffect, useState } from "react";
-import {
-  AssetId,
-  StealthPayment,
-  StealthProfile,
-} from "../types";
+import { AssetId, StealthPayment, StealthProfile } from "../types";
 
 const PROFILE_STORAGE_KEY = "xcm-stealth-profile";
 const PAYMENTS_STORAGE_KEY = "xcm-stealth-payments";
@@ -43,16 +39,13 @@ const writeToStorage = (key: string, value: unknown) => {
   }
 };
 
-type SendInput = {
-  recipientStealthPublicId: string;
+type RecordPaymentInput = {
+  stealthId: string;
+  stealthIdHex: `0x${string}`;
   assetId: AssetId;
   amount: number;
-};
-
-type SimulateIncomingInput = {
-  stealthId?: string;
-  assetId?: AssetId;
-  amount?: number;
+  direction?: "incoming" | "outgoing";
+  txHash?: `0x${string}`;
 };
 
 export const useStealthState = () => {
@@ -81,20 +74,21 @@ export const useStealthState = () => {
     []
   );
 
-  const sendStealthPayment = useCallback(
-    ({ recipientStealthPublicId, assetId, amount }: SendInput) => {
-      const stealthId = `stealth-${recipientStealthPublicId.slice(0, 8) || "anon"}-${Date.now()}`;
+  const recordStealthPayment = useCallback(
+    ({ stealthId, stealthIdHex, assetId, amount, direction, txHash }: RecordPaymentInput) => {
       const newPayment: StealthPayment = {
         id:
           typeof crypto !== "undefined" && crypto.randomUUID
             ? crypto.randomUUID()
             : `payment-${Date.now()}`,
         stealthId,
+        stealthIdHex,
         assetId,
         amount,
-        direction: "outgoing",
+        direction: direction ?? "incoming",
         status: "unread",
         createdAt: new Date().toISOString(),
+        txHash,
       };
 
       setPayments((prev) => {
@@ -106,35 +100,10 @@ export const useStealthState = () => {
     []
   );
 
-  const simulateIncomingStealthPayment = useCallback(
-    (input?: SimulateIncomingInput) => {
-      const randomAmount = Number((Math.random() * 4 + 1).toFixed(2));
-      const newPayment: StealthPayment = {
-        id:
-          typeof crypto !== "undefined" && crypto.randomUUID
-            ? crypto.randomUUID()
-            : `payment-${Date.now()}`,
-        stealthId: input?.stealthId ?? `stealth-${Math.random().toString(36).slice(2, 10)}`,
-        assetId: input?.assetId ?? "KSM",
-        amount: input?.amount ?? randomAmount,
-        direction: "incoming",
-        status: "unread",
-        createdAt: new Date().toISOString(),
-      };
-
-      setPayments((prev) => {
-        const nextPayments = [newPayment, ...prev];
-        writeToStorage(PAYMENTS_STORAGE_KEY, nextPayments);
-        return nextPayments;
-      });
-    },
-    []
-  );
-
-  const withdrawPayment = useCallback((id: string) => {
+  const markPaymentWithdrawn = useCallback((id: string) => {
     setPayments((prev) => {
       const nextPayments = prev.map((payment) =>
-        payment.id === id && payment.direction === "incoming" && payment.status === "unread"
+        payment.id === id && payment.status === "unread"
           ? { ...payment, status: "withdrawn" }
           : payment
       );
@@ -148,9 +117,8 @@ export const useStealthState = () => {
     profile,
     payments,
     updateProfile,
-    sendStealthPayment,
-    simulateIncomingStealthPayment,
-    withdrawPayment,
+    sendStealthPayment: recordStealthPayment,
+    withdrawPayment: markPaymentWithdrawn,
   };
   return state;
 };

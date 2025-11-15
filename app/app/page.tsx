@@ -21,7 +21,6 @@ export default function Home() {
     payments,
     updateProfile,
     sendStealthPayment,
-    simulateIncomingStealthPayment,
     withdrawPayment,
   } = useStealthState();
 
@@ -55,13 +54,17 @@ export default function Home() {
           <ProfileSection profile={profile} onSave={updateProfile} />
         )}
 
-        {activeTab === "send" && <SendSection onSend={sendStealthPayment} />}
+        {activeTab === "send" && (
+          <SendSection
+            onSend={sendStealthPayment}
+            defaultRecipientStealthId={profile.stealthPublicId}
+          />
+        )}
 
         {activeTab === "inbox" && (
           <InboxSection
             payments={payments}
             onWithdraw={withdrawPayment}
-            onSimulateIncoming={() => simulateIncomingStealthPayment()}
           />
         )}
       </main>
