@@ -72,6 +72,41 @@ export const STEALTH_VAULT_ABI = [
     inputs: [],
     outputs: [{ name: "", type: "address" }],
   },
+  {
+    type: "function",
+    name: "createInvoice",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "invoiceId", type: "bytes32" },
+      { name: "merchant", type: "address" },
+      { name: "assetId", type: "bytes32" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "payInvoice",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "stealthId", type: "bytes32" },
+      { name: "assetId", type: "bytes32" },
+      { name: "invoiceId", type: "bytes32" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "invoices",
+    stateMutability: "view",
+    inputs: [{ name: "invoiceId", type: "bytes32" }],
+    outputs: [
+      { name: "merchant", type: "address" },
+      { name: "assetId", type: "bytes32" },
+      { name: "amount", type: "uint256" },
+      { name: "paid", type: "bool" },
+    ],
+  },
 ] as const;
 
 export const STEALTH_VAULT_ADDRESS_LOCAL = process.env
@@ -87,4 +122,7 @@ export const TEST_TOKEN_ADDRESS_PASSET = process.env
   .NEXT_PUBLIC_TEST_TOKEN_ADDRESS_PASSET as `0x${string}` | undefined;
 
 export const TEST_ASSET_ID = keccak256(toBytes("TST")) as `0x${string}`;
+
+export const MERCHANT_ADDRESS_PASSET = process.env
+  .NEXT_PUBLIC_MERCHANT_ADDRESS_PASSET as `0x${string}` | undefined;
 
