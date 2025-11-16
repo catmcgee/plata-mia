@@ -1,9 +1,10 @@
-import { createClient, StorageQueryType } from "@hyperbridge/sdk";
 import {
   Hex,
+  createPublicClient,
   encodeAbiParameters,
   hexToBigInt,
   hexToBytes,
+  http,
   keccak256,
   numberToHex,
   parseAbiParameters,
@@ -20,35 +21,58 @@ import {
  */
 
 const encoder = parseAbiParameters("bytes32, uint256");
-const BALANCES_BASE_SLOT = 1n;
-const INVOICES_BASE_SLOT = 2n;
+// IMPORTANT: token is immutable, so it doesn't occupy a storage slot
+// Therefore balances is at slot 0, not slot 1
+const BALANCES_BASE_SLOT = 0n;
+const INVOICES_BASE_SLOT = 1n;
 const INVOICE_PAID_OFFSET = 3n;
 
 const DEFAULT_CHAIN_ID = BigInt(process.env.HYPERBRIDGE_CHAIN_ID ?? "420420422");
+const DEFAULT_RPC_URL =
+  process.env.HYPERBRIDGE_RPC_URL ?? "https://testnet-passet-hub-eth-rpc.polkadot.io";
+const INDEXER_BASE_URL = process.env.HYPERBRIDGE_INDEXER_URL?.replace(/\/$/, "");
+const INDEXER_TIMEOUT_MS = Number(process.env.HYPERBRIDGE_INDEXER_TIMEOUT_MS ?? "7000");
 
 type HyperbridgeConfig = {
   chainId: bigint;
-  indexerUrl: string;
+  rpcUrl: string;
   vaultAddress: Hex;
 };
 
-function getHyperbridgeConfig(): HyperbridgeConfig {
-  const indexerUrl = process.env.HYPERBRIDGE_INDEXER_URL;
-  const vaultAddress = process.env.STEALTH_VAULT_ADDRESS_PASSET as Hex | undefined;
+let hyperbridgeConfig: HyperbridgeConfig | undefined;
+let hyperbridgeClient:
+  | ReturnType<typeof createPublicClient<{ chain: undefined; transport: ReturnType<typeof http> }>>
+  | undefined;
 
-  if (!indexerUrl) {
-    throw new Error("Missing HYPERBRIDGE_INDEXER_URL env var.");
+function getHyperbridgeContext(): HyperbridgeConfig {
+  if (hyperbridgeConfig && hyperbridgeClient) {
+    return hyperbridgeConfig;
   }
+
+  const rpcUrl = DEFAULT_RPC_URL;
+  const vaultAddress = process.env.STEALTH_VAULT_ADDRESS_PASSET as Hex | undefined;
 
   if (!vaultAddress) {
     throw new Error("Missing STEALTH_VAULT_ADDRESS_PASSET env var.");
   }
 
-  return {
+  hyperbridgeConfig = {
     chainId: DEFAULT_CHAIN_ID,
-    indexerUrl,
+    rpcUrl,
     vaultAddress,
   };
+  hyperbridgeClient = createPublicClient({
+    transport: http(rpcUrl),
+  });
+
+  return hyperbridgeConfig;
+}
+
+function getPublicClient() {
+  if (!hyperbridgeClient) {
+    getHyperbridgeContext();
+  }
+  return hyperbridgeClient!;
 }
 
 function assertHex32(value: string, label: string): Hex {
@@ -80,9 +104,23 @@ function addSlotOffset(slot: Hex, offset: bigint): Hex {
   return numberToHex(base + offset, { size: 32 }) as Hex;
 }
 
-function createHyperbridgeClient(baseUrl: string) {
-  return createClient({ baseUrl });
-}
+const parseIndexerBigInt = (value?: string | number | bigint | null): bigint => {
+  if (typeof value === "bigint") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return BigInt(value);
+  }
+  if (!value || value.length === 0) {
+    return 0n;
+  }
+  const normalized = value === "0x" || value === "0X" ? "0x0" : value;
+  try {
+    return BigInt(normalized);
+  } catch {
+    return 0n;
+  }
+};
 
 export type StealthBalanceResult = {
   chainId: bigint;
@@ -101,19 +139,41 @@ export async function queryStealthBalanceViaHyperbridge(params: {
   const stealthHex = assertHex32(params.stealthId, "stealthId");
   const assetHex = assertHex32(params.assetId, "assetId");
 
-  const { chainId, indexerUrl, vaultAddress } = getHyperbridgeConfig();
-  const client = createHyperbridgeClient(indexerUrl);
+  if (INDEXER_BASE_URL) {
+    const data = await fetchViaIndexer<{
+      chainId: string;
+      vaultAddress: Hex;
+      stealthId: Hex;
+      assetId: Hex;
+      slot: Hex;
+      raw: string;
+      human: string;
+    }>("/stealth-balance", {
+      stealthId: stealthHex,
+      assetId: assetHex,
+    });
 
+    return {
+      chainId: parseIndexerBigInt(data.chainId),
+      vaultAddress: data.vaultAddress,
+      stealthId: data.stealthId,
+      assetId: data.assetId,
+      slot: data.slot,
+      raw: parseIndexerBigInt(data.raw),
+      human: data.human,
+    };
+  }
+
+  const { chainId, vaultAddress } = getHyperbridgeContext();
+  const client = getPublicClient();
   const slot = computeBalancesSlot(stealthHex, assetHex);
 
-  const response = await client.storage.query({
-    type: StorageQueryType.Get,
-    chainId,
-    contract: vaultAddress,
-    key: slot,
+  const storageValue = await client.getStorageAt({
+    address: vaultAddress,
+    slot,
   });
 
-  const rawValue = response?.value ?? "0x0";
+  const rawValue = storageValue ?? "0x0";
   const raw = hexToBigInt(rawValue);
 
   return {
@@ -137,6 +197,36 @@ export async function queryStealthCreditViaHyperbridge(params: {
   assetId: string;
   amount: bigint;
 }): Promise<StealthCreditResult> {
+  if (INDEXER_BASE_URL) {
+    const data = await fetchViaIndexer<{
+      chainId: string;
+      vaultAddress: Hex;
+      stealthId: Hex;
+      assetId: Hex;
+      slot: Hex;
+      raw: string;
+      human: string;
+      requestedAmount: string;
+      canPay: boolean;
+    }>("/stealth-credit", {
+      stealthId: params.stealthId,
+      assetId: params.assetId,
+      amount: params.amount.toString(),
+    });
+
+    return {
+      chainId: parseIndexerBigInt(data.chainId),
+      vaultAddress: data.vaultAddress,
+      stealthId: data.stealthId,
+      assetId: data.assetId,
+      slot: data.slot,
+      raw: parseIndexerBigInt(data.raw),
+      human: data.human,
+      requestedAmount: parseIndexerBigInt(data.requestedAmount),
+      canPay: data.canPay,
+    };
+  }
+
   const balance = await queryStealthBalanceViaHyperbridge({
     stealthId: params.stealthId,
     assetId: params.assetId,
@@ -149,6 +239,60 @@ export async function queryStealthCreditViaHyperbridge(params: {
     requestedAmount: params.amount,
     canPay,
   };
+}
+
+export type AggregatedStealthCreditResult = {
+  chainId: bigint;
+  vaultAddress: Hex;
+  stealthId: Hex;
+  assetId: Hex;
+  slot: Hex;
+  raw: bigint;
+  human: string;
+  requestedAmount: bigint;
+  canPay: boolean;
+};
+
+export async function queryAggregatedStealthCreditViaHyperbridge(params: {
+  stealthPublicId: string;
+  assetId: string;
+  amount: bigint;
+}): Promise<AggregatedStealthCreditResult> {
+  const assetHex = assertHex32(params.assetId, "assetId");
+
+  if (INDEXER_BASE_URL) {
+    const data = await fetchViaIndexer<{
+      chainId: string;
+      vaultAddress: Hex;
+      stealthId: Hex;
+      assetId: Hex;
+      slot: Hex;
+      raw: string;
+      human: string;
+      requestedAmount: string;
+      canPay: boolean;
+    }>("/aggregated-stealth-credit", {
+      stealthPublicId: params.stealthPublicId,
+      assetId: assetHex,
+      amount: params.amount.toString(),
+    });
+
+    return {
+      chainId: parseIndexerBigInt(data.chainId),
+      vaultAddress: data.vaultAddress,
+      stealthId: data.stealthId,
+      assetId: data.assetId,
+      slot: data.slot,
+      raw: parseIndexerBigInt(data.raw),
+      human: data.human,
+      requestedAmount: parseIndexerBigInt(data.requestedAmount),
+      canPay: data.canPay,
+    };
+  }
+
+  throw new Error(
+    "Aggregated stealth credit requires HYPERBRIDGE_INDEXER_URL to be configured"
+  );
 }
 
 export type InvoiceStatusResult = {
@@ -165,20 +309,39 @@ export async function queryInvoiceStatusViaHyperbridge(params: {
 }): Promise<InvoiceStatusResult> {
   const invoiceHex = assertHex32(params.invoiceId, "invoiceId");
 
-  const { chainId, indexerUrl, vaultAddress } = getHyperbridgeConfig();
-  const client = createHyperbridgeClient(indexerUrl);
+  if (INDEXER_BASE_URL) {
+    const data = await fetchViaIndexer<{
+      chainId: string;
+      vaultAddress: Hex;
+      invoiceId: Hex;
+      slot: Hex;
+      raw: string;
+      paid: boolean;
+    }>("/invoice-status", {
+      invoiceId: invoiceHex,
+    });
 
+    return {
+      chainId: parseIndexerBigInt(data.chainId),
+      vaultAddress: data.vaultAddress,
+      invoiceId: data.invoiceId,
+      slot: data.slot,
+      raw: parseIndexerBigInt(data.raw),
+      paid: data.paid,
+    };
+  }
+
+  const { chainId, vaultAddress } = getHyperbridgeContext();
+  const client = getPublicClient();
   const structSlot = computeInvoiceStructSlot(invoiceHex);
   const paidSlot = addSlotOffset(structSlot, INVOICE_PAID_OFFSET);
 
-  const response = await client.storage.query({
-    type: StorageQueryType.Get,
-    chainId,
-    contract: vaultAddress,
-    key: paidSlot,
+  const storageValue = await client.getStorageAt({
+    address: vaultAddress,
+    slot: paidSlot,
   });
 
-  const rawValue = response?.value ?? "0x0";
+  const rawValue = storageValue ?? "0x0";
   const raw = hexToBigInt(rawValue);
   const paid = raw !== 0n;
 
@@ -190,6 +353,36 @@ export async function queryInvoiceStatusViaHyperbridge(params: {
     raw,
     paid,
   };
+}
+
+async function fetchViaIndexer<T>(endpoint: string, params: Record<string, string>) {
+  if (!INDEXER_BASE_URL) {
+    throw new Error("Indexer URL is not configured");
+  }
+  const url = new URL(endpoint.startsWith("/") ? endpoint : `/${endpoint}`, `${INDEXER_BASE_URL}/`);
+  for (const [key, value] of Object.entries(params)) {
+    url.searchParams.set(key, value);
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), INDEXER_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      signal: controller.signal,
+      headers: {
+        "x-hyperbridge-client": "plata-mia-app",
+      },
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data?.error ?? `Indexer request failed (${response.status})`);
+    }
+    return data as T;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 

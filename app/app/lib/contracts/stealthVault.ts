@@ -33,6 +33,13 @@ export const ERC20_ABI = [
 export const STEALTH_VAULT_ABI = [
   {
     type: "function",
+    name: "NATIVE_ASSET_ID",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "bytes32" }],
+  },
+  {
+    type: "function",
     name: "balances",
     stateMutability: "view",
     inputs: [
@@ -49,6 +56,16 @@ export const STEALTH_VAULT_ABI = [
       { name: "stealthId", type: "bytes32" },
       { name: "assetId", type: "bytes32" },
       { name: "amount", type: "uint256" },
+      { name: "receiverTag", type: "bytes32" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "depositStealthNative",
+    stateMutability: "payable",
+    inputs: [
+      { name: "stealthId", type: "bytes32" },
       { name: "receiverTag", type: "bytes32" },
     ],
     outputs: [],
@@ -97,6 +114,17 @@ export const STEALTH_VAULT_ABI = [
   },
   {
     type: "function",
+    name: "payInvoiceMulti",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "stealthIds", type: "bytes32[]" },
+      { name: "assetId", type: "bytes32" },
+      { name: "invoiceId", type: "bytes32" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
     name: "invoices",
     stateMutability: "view",
     inputs: [{ name: "invoiceId", type: "bytes32" }],
@@ -123,6 +151,8 @@ export const TEST_TOKEN_ADDRESS_PASSET = process.env
 
 export const TEST_ASSET_ID = keccak256(toBytes("TST")) as `0x${string}`;
 
+// Native token (PAS) asset ID
+export const NATIVE_ASSET_ID = keccak256(toBytes("PAS")) as `0x${string}`;
+
 export const MERCHANT_ADDRESS_PASSET = process.env
   .NEXT_PUBLIC_MERCHANT_ADDRESS_PASSET as `0x${string}` | undefined;
-
