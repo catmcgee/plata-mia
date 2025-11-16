@@ -4,7 +4,9 @@
 
 **Privacy-Preserving Cross-Chain Payments**
 
-Plata Mia enables anyone to have spendable stealth balances on Asset Hub that are unlinkable to their wallet or other stealth balances.
+Plata Mia enables anyone to have spendable stealth balances on any chain that are unlinkable to their wallet or other stealth balances.
+
+It uses Hyperbridge to spend the stealth balances that exist on Asset Hub anywhere. It then uses xx-network to send private notifications so we don't to have a use a tagging system (more private!)
 
 ---
 
