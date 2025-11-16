@@ -102,7 +102,7 @@ export const useStealthState = () => {
 
   const markPaymentWithdrawn = useCallback((id: string) => {
     setPayments((prev) => {
-      const nextPayments = prev.map((payment) =>
+      const nextPayments = prev.map((payment): StealthPayment =>
         payment.id === id && payment.status === "unread"
           ? { ...payment, status: "withdrawn" }
           : payment
