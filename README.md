@@ -1,5 +1,7 @@
 # Plata Mia
 
+[Live demo!](https://plata-mia.vercel.app/) (the xx network stuff works locally, but I'm having some issues on the live app. the rest should work)
+
 [View the video](https://share.descript.com/view/Xyq1SJTQfkS)
 
 **Privacy-Preserving Cross-Chain Payments**
