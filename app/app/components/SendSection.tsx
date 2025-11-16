@@ -24,12 +24,12 @@ const SendSection = ({ onSend, defaultRecipientStealthId }: SendSectionProps) =>
   const [recipientStealthPublicId, setRecipientStealthPublicId] = useState(
     defaultRecipientStealthId ?? ""
   );
-  const [assetId, setAssetId] = useState<AssetId>("KSM");
+  const [assetId, setAssetId] = useState<AssetId>("PAS");
   const [amountInput, setAmountInput] = useState<string>("");
   const [formError, setFormError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { depositStealth, isConfigured, vaultAddress, networkLabel } = useStealthVault();
+  const { depositStealthNative, isConfigured, vaultAddress, networkLabel } = useStealthVault();
 
   useEffect(() => {
     if (defaultRecipientStealthId !== undefined) {
@@ -42,7 +42,7 @@ const SendSection = ({ onSend, defaultRecipientStealthId }: SendSectionProps) =>
       return "Submitting transaction…";
     }
     if (txHash) {
-      return `Tx confirmed: ${txHash.slice(0, 6)}…${txHash.slice(-4)}`;
+      return `Tx confirmed: ${txHash}`;
     }
     return null;
   }, [isSubmitting, txHash]);
@@ -69,13 +69,14 @@ const SendSection = ({ onSend, defaultRecipientStealthId }: SendSectionProps) =>
 
     try {
       setIsSubmitting(true);
-      const stealthIdHex = keccak256(
-        toBytes(`${recipientStealthPublicId}:${Date.now().toString()}`)
-      ) as `0x${string}`;
+      // Create unique stealthId for this payment (privacy)
+      const ephemeralData = `${recipientStealthPublicId}:${Date.now().toString()}:${Math.random().toString()}`;
+      const stealthIdHex = keccak256(toBytes(ephemeralData)) as `0x${string}`;
+      // ReceiverTag allows recipient to discover all their payments
       const receiverTag = keccak256(toBytes(recipientStealthPublicId)) as `0x${string}`;
       const parsedAmount = parseUnits(amountInput, 18);
 
-      const { hash } = await depositStealth({
+      const { hash } = await depositStealthNative({
         stealthId: stealthIdHex,
         amount: parsedAmount,
         receiverTag,
@@ -106,14 +107,24 @@ const SendSection = ({ onSend, defaultRecipientStealthId }: SendSectionProps) =>
     <section className="card section">
       <header className="section-header">
         <div>
-          <p className="eyebrow">Send</p>
-          <h2>Stealth Transfer</h2>
+          <p className="eyebrow">SEND</p>
+          <h2>STEALTH TRANSFER</h2>
         </div>
         <div className="status-stack">
           {formError && <span className="status-pill danger">{formError}</span>}
           {txStatusMessage && <span className="status-pill success">{txStatusMessage}</span>}
         </div>
       </header>
+
+      <div className="info-snippet">
+        <p>
+          <strong>What to do:</strong> Enter the recipient’s stealth ID and how much PAS you want to send them. Try sending it to yourself for now!
+        </p>
+        <p>
+          <strong>What happens:</strong> Each submission creates a brand-new stealth ID plus receiver tag
+          on Polkadot Hub, so no one can correlate transfers. 
+        </p>
+      </div>
 
       <form className="form-grid" onSubmit={handleSubmit}>
         <label className="input-control">
@@ -129,8 +140,7 @@ const SendSection = ({ onSend, defaultRecipientStealthId }: SendSectionProps) =>
         <label className="input-control">
           <span>Asset</span>
           <select value={assetId} onChange={(event) => setAssetId(event.target.value as AssetId)}>
-            <option value="KSM">KSM</option>
-            <option value="USDT">USDT</option>
+            <option value="PAS">PAS (Native)</option>
           </select>
         </label>
 

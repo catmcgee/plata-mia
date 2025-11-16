@@ -25,13 +25,6 @@ const formatDate = (iso: string) => {
   });
 };
 
-const shorten = (value: string) => {
-  if (value.length <= 12) {
-    return value;
-  }
-  return `${value.slice(0, 10)}…`;
-};
-
 const InboxSection = ({ payments, onWithdraw }: InboxSectionProps) => {
   const { withdraw, vaultAddress, isConfigured, networkLabel } = useStealthVault();
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null);
@@ -43,7 +36,7 @@ const InboxSection = ({ payments, onWithdraw }: InboxSectionProps) => {
       return "Submitting withdraw transaction…";
     }
     if (txHash) {
-      return `Withdraw confirmed: ${txHash.slice(0, 6)}…${txHash.slice(-4)}`;
+      return `Withdraw confirmed: ${txHash}`;
     }
     return null;
   }, [isSubmitting, txHash]);
@@ -86,14 +79,24 @@ const InboxSection = ({ payments, onWithdraw }: InboxSectionProps) => {
     <section className="card section">
       <header className="section-header">
         <div>
-          <p className="eyebrow">Inbox / Withdraw</p>
-          <h2>Pending & Historical Payments</h2>
+          <p className="eyebrow">INBOX / WITHDRAW</p>
+          <h2>PENDING & HISTORICAL PAYMENTS</h2>
         </div>
         <div className="status-stack">
           {txError && <span className="status-pill danger">{txError}</span>}
           {txStatusMessage && <span className="status-pill success">{txStatusMessage}</span>}
         </div>
       </header>
+
+      <div className="info-snippet">
+        <p>
+          <strong>What to do:</strong> Review each stealth deposit that is for stealth IDs that you control.
+          Then withdraw the ones you want to realize on Polkadot. Note that this will create an onchain link between 
+          the stealth ID and your main address. 
+          <br></br> If you want to use your stealth balance to pay for something (eg in the shop), don't withdraw. 
+        </p>
+       
+      </div>
 
       {payments.length === 0 ? (
         <div className="empty-state">
@@ -121,7 +124,7 @@ const InboxSection = ({ payments, onWithdraw }: InboxSectionProps) => {
                       {payment.direction === "incoming" ? "Incoming" : "Outgoing"}
                     </span>
                   </td>
-                  <td className="mono">{shorten(payment.stealthId)}</td>
+                  <td className="mono break-all">{payment.stealthId}</td>
                   <td>{payment.assetId}</td>
                   <td>{payment.amount.toFixed(2)}</td>
                   <td>
