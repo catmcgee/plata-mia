@@ -2,9 +2,11 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { keccak256, parseUnits, toBytes } from "viem";
+import { useChainId } from "wagmi";
 
 import { AssetId } from "../types";
 import useStealthVault from "../hooks/useStealthVault";
+import { notifyStealthPayment } from "../lib/xxNotify";
 
 type SendFormSubmission = {
   stealthId: string;
@@ -18,9 +20,10 @@ type SendFormSubmission = {
 type SendSectionProps = {
   onSend: (input: SendFormSubmission) => void;
   defaultRecipientStealthId?: string;
+  xxUserId?: string | null;
 };
 
-const SendSection = ({ onSend, defaultRecipientStealthId }: SendSectionProps) => {
+const SendSection = ({ onSend, defaultRecipientStealthId, xxUserId }: SendSectionProps) => {
   const [recipientStealthPublicId, setRecipientStealthPublicId] = useState(
     defaultRecipientStealthId ?? ""
   );
@@ -30,6 +33,7 @@ const SendSection = ({ onSend, defaultRecipientStealthId }: SendSectionProps) =>
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { depositStealthNative, isConfigured, vaultAddress, networkLabel } = useStealthVault();
+  const chainId = useChainId();
 
   useEffect(() => {
     if (defaultRecipientStealthId !== undefined) {
@@ -86,14 +90,25 @@ const SendSection = ({ onSend, defaultRecipientStealthId }: SendSectionProps) =>
       setRecipientStealthPublicId("");
       setAmountInput("");
 
-      onSend({
+    onSend({
         stealthId: recipientStealthPublicId,
         stealthIdHex,
-        assetId,
-        amount: numericAmount,
+      assetId,
+      amount: numericAmount,
         direction: "incoming",
         txHash: hash,
       });
+
+      if (xxUserId) {
+        void notifyStealthPayment({
+          xxUserId,
+          stealthId: stealthIdHex,
+          asset: "PAS",
+          amount: parsedAmount.toString(),
+          originChainId: chainId ?? undefined,
+          txHash: hash,
+        });
+      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to submit stealth payment transaction.";

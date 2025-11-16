@@ -64,7 +64,7 @@ const WalletBar = () => {
     <section className="wallet-bar card">
       {!isConnected ? (
         <div className="wallet-row">
-          <p>Connect your EVM wallet to interact with the StealthVault.</p>
+          <p>Connect your wallet</p>
           <button
             type="button"
             className="primary-button"
