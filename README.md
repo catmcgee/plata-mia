@@ -4,7 +4,7 @@
 
 **Privacy-Preserving Cross-Chain Payments**
 
-Plata Mia enables private, unlinkable payments using stealth addresses with cross-chain balance verification through Hyperbridge and notifications with XX Network.
+Plata Mia enables anyone to have spendable stealth balances on Asset Hub that are unlinkable to their wallet or other stealth balances.
 
 ---
 

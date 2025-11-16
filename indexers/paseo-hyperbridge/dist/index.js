@@ -1,8 +1,8 @@
 import pino from "pino";
-import { buildConfig } from "./config";
-import { createHyperbridgeService } from "./hyperbridge";
-import { createServer } from "./server";
-import { IndexerState } from "./state";
+import { buildConfig } from "./config.js";
+import { createHyperbridgeService } from "./hyperbridge.js";
+import { createServer } from "./server.js";
+import { IndexerState } from "./state.js";
 async function main() {
     const config = buildConfig();
     const logger = pino({

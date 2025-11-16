@@ -1,10 +1,10 @@
-import fastify, { type FastifyInstance } from "fastify";
+import fastify from "fastify";
 import type { Logger } from "pino";
 import { z } from "zod";
 
-import type { RuntimeConfig } from "./config";
-import type { HyperbridgeService } from "./hyperbridge";
-import type { StealthBalanceResult, StealthCreditResult } from "./types";
+import type { RuntimeConfig } from "./config.js";
+import type { HyperbridgeService } from "./hyperbridge.js";
+import type { StealthBalanceResult, StealthCreditResult } from "./types.js";
 
 const stealthBalanceQuerySchema = z.object({
   stealthId: z.string(),
@@ -21,7 +21,10 @@ const stealthCreditQuerySchema = stealthBalanceQuerySchema.extend({
         return false;
       }
     },
-    { message: "amount must be a valid number or hex string convertible to BigInt" }
+    {
+      message:
+        "amount must be a valid number or hex string convertible to BigInt",
+    }
   ),
 });
 
@@ -38,7 +41,7 @@ export function createServer(
   hyperbridge: HyperbridgeService,
   logger: Logger
 ) {
-  const app: FastifyInstance = fastify({
+  const app = fastify({
     logger,
   });
 
@@ -91,12 +94,17 @@ export function createServer(
       const parsed = stealthBalanceQuerySchema.parse(request.query);
       const stealthId = hyperbridge.assertHex32(parsed.stealthId, "stealthId");
       const assetId = hyperbridge.assertHex32(parsed.assetId, "assetId");
-      const result = await hyperbridge.queryStealthBalance({ stealthId, assetId });
+      const result = await hyperbridge.queryStealthBalance({
+        stealthId,
+        assetId,
+      });
       return {
         ...serializeBalance(result),
       };
     } catch (error) {
-      reply.code(error instanceof Error && /must be/.test(error.message) ? 400 : 500);
+      reply.code(
+        error instanceof Error && /must be/.test(error.message) ? 400 : 500
+      );
       return { error: (error as Error).message };
     }
   });
@@ -107,12 +115,18 @@ export function createServer(
       const stealthId = hyperbridge.assertHex32(parsed.stealthId, "stealthId");
       const assetId = hyperbridge.assertHex32(parsed.assetId, "assetId");
       const amount = BigInt(parsed.amount);
-      const result = await hyperbridge.queryStealthCredit({ stealthId, assetId, amount });
+      const result = await hyperbridge.queryStealthCredit({
+        stealthId,
+        assetId,
+        amount,
+      });
       return {
         ...serializeCredit(result),
       };
     } catch (error) {
-      reply.code(error instanceof Error && /must be/.test(error.message) ? 400 : 500);
+      reply.code(
+        error instanceof Error && /must be/.test(error.message) ? 400 : 500
+      );
       return { error: (error as Error).message };
     }
   });
@@ -132,7 +146,10 @@ export function createServer(
                 return false;
               }
             },
-            { message: "amount must be a valid number or hex string convertible to BigInt" }
+            {
+              message:
+                "amount must be a valid number or hex string convertible to BigInt",
+            }
           ),
         })
         .parse(request.query);
@@ -151,7 +168,9 @@ export function createServer(
         ...serializeCredit({ ...result, requestedAmount: amount, canPay }),
       };
     } catch (error) {
-      reply.code(error instanceof Error && /must be/.test(error.message) ? 400 : 500);
+      reply.code(
+        error instanceof Error && /must be/.test(error.message) ? 400 : 500
+      );
       return { error: (error as Error).message };
     }
   });
@@ -170,7 +189,9 @@ export function createServer(
         paid: result.paid,
       };
     } catch (error) {
-      reply.code(error instanceof Error && /must be/.test(error.message) ? 400 : 500);
+      reply.code(
+        error instanceof Error && /must be/.test(error.message) ? 400 : 500
+      );
       return { error: (error as Error).message };
     }
   });
@@ -181,7 +202,10 @@ export function createServer(
         port: config.HYPERBRIDGE_INDEXER_PORT,
         host: "0.0.0.0",
       });
-      logger.info({ port: config.HYPERBRIDGE_INDEXER_PORT }, "HTTP server ready");
+      logger.info(
+        { port: config.HYPERBRIDGE_INDEXER_PORT },
+        "HTTP server ready"
+      );
     },
     stop: async () => {
       await app.close();
@@ -208,4 +232,3 @@ function serializeCredit(result: StealthCreditResult) {
     canPay: result.canPay,
   };
 }
-

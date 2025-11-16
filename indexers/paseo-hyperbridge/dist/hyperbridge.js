@@ -68,6 +68,11 @@ export function createHyperbridgeService(config, state, logger) {
             stateMachineId: config.HYPERBRIDGE_DEST_STATE_MACHINE_ID,
             host: config.HYPERBRIDGE_DEST_HOST,
         },
+        hyperbridge: {
+            wsUrl: config.PASSET_RPC_URL,
+            consensusStateId: config.HYPERBRIDGE_DEST_CONSENSUS_STATE_ID,
+            stateMachineId: config.HYPERBRIDGE_DEST_STATE_MACHINE_ID,
+        },
     });
     const emitter = indexer;
     async function queryStealthBalance(params) {

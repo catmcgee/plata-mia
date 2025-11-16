@@ -14,15 +14,17 @@ import {
   parseAbiParameters,
 } from "viem";
 
-import type { RuntimeConfig } from "./config";
-import type { IndexerState, PacketRecord } from "./state";
+import type { RuntimeConfig } from "./config.js";
+import type { IndexerState, PacketRecord } from "./state.js";
 import type {
   InvoiceStatusResult,
   StealthBalanceParams,
   StealthBalanceResult,
   StealthCreditParams,
   StealthCreditResult,
-} from "./types";
+} from "./types.js";
+
+type IndexerClientConfig = ConstructorParameters<typeof IndexerClient>[0];
 
 const encoder = parseAbiParameters("bytes32, uint256");
 // IMPORTANT: token is immutable, so it doesn't occupy a storage slot
@@ -73,7 +75,8 @@ function normalizePacket(raw: unknown): PacketRecord {
   return {
     id: String(packet?.id ?? packet?.packetId ?? randomUUID()),
     height: Number.isFinite(maybeHeight) ? maybeHeight : undefined,
-    source: (packet?.source as string) ?? (packet?.sourceStateMachineId as string),
+    source:
+      (packet?.source as string) ?? (packet?.sourceStateMachineId as string),
     dest: (packet?.dest as string) ?? (packet?.destStateMachineId as string),
     timestamp: packet?.timestamp ? Number(packet.timestamp) : Date.now(),
     raw,
@@ -106,24 +109,32 @@ export function createHyperbridgeService(
       rpcUrl: config.PASEO_RPC_URL,
       stateMachineId: config.HYPERBRIDGE_SOURCE_STATE_MACHINE_ID,
       host: config.HYPERBRIDGE_SOURCE_HOST,
-    },
+    } as unknown as IndexerClientConfig["source"],
     dest: {
       consensusStateId: config.HYPERBRIDGE_DEST_CONSENSUS_STATE_ID,
       rpcUrl: config.PASSET_RPC_URL,
       stateMachineId: config.HYPERBRIDGE_DEST_STATE_MACHINE_ID,
       host: config.HYPERBRIDGE_DEST_HOST,
-    },
+    } as unknown as IndexerClientConfig["dest"],
+    hyperbridge: {
+      wsUrl: config.PASSET_RPC_URL,
+      consensusStateId: config.HYPERBRIDGE_DEST_CONSENSUS_STATE_ID,
+      stateMachineId: config.HYPERBRIDGE_DEST_STATE_MACHINE_ID,
+    } as unknown as IndexerClientConfig["hyperbridge"],
   });
 
   const emitter = indexer as unknown as MaybeEmitter;
 
-  async function queryStealthBalance(params: StealthBalanceParams): Promise<StealthBalanceResult> {
+  async function queryStealthBalance(
+    params: StealthBalanceParams
+  ): Promise<StealthBalanceResult> {
     const slot = computeBalancesSlot(params.stealthId, params.assetId);
     const storageValue = await pasetClient.getStorageAt({
       address: vaultAddress,
       slot,
     });
-    const normalizedValue = !storageValue || storageValue === "0x" ? "0x0" : storageValue;
+    const normalizedValue =
+      !storageValue || storageValue === "0x" ? "0x0" : storageValue;
     const raw = hexToBigInt(normalizedValue);
 
     return {
@@ -137,7 +148,9 @@ export function createHyperbridgeService(
     };
   }
 
-  async function queryStealthCredit(params: StealthCreditParams): Promise<StealthCreditResult> {
+  async function queryStealthCredit(
+    params: StealthCreditParams
+  ): Promise<StealthCreditResult> {
     const balance = await queryStealthBalance(params);
     return {
       ...balance,
@@ -146,14 +159,17 @@ export function createHyperbridgeService(
     };
   }
 
-  async function queryInvoiceStatus(invoiceId: Hex): Promise<InvoiceStatusResult> {
+  async function queryInvoiceStatus(
+    invoiceId: Hex
+  ): Promise<InvoiceStatusResult> {
     const structSlot = computeInvoiceStructSlot(invoiceId);
     const paidSlot = addSlotOffset(structSlot, INVOICE_PAID_OFFSET);
     const storageValue = await pasetClient.getStorageAt({
       address: vaultAddress,
       slot: paidSlot,
     });
-    const normalizedValue = !storageValue || storageValue === "0x" ? "0x0" : storageValue;
+    const normalizedValue =
+      !storageValue || storageValue === "0x" ? "0x0" : storageValue;
     const raw = hexToBigInt(normalizedValue);
     return {
       chainId,
@@ -195,7 +211,9 @@ export function createHyperbridgeService(
 
     // Filter by receiverTag and assetId in JavaScript
     const relevantPayments = logs.filter(
-      (log) => log.args.receiverTag === receiverTag && log.args.assetId === params.assetId
+      (log) =>
+        log.args.receiverTag === receiverTag &&
+        log.args.assetId === params.assetId
     );
 
     // Aggregate balances from all discovered stealthIds
@@ -210,7 +228,8 @@ export function createHyperbridgeService(
         slot,
       });
 
-      const normalizedValue = !storageValue || storageValue === "0x" ? "0x0" : storageValue;
+      const normalizedValue =
+        !storageValue || storageValue === "0x" ? "0x0" : storageValue;
       const balance = hexToBigInt(normalizedValue);
       totalBalance += balance;
     }
@@ -234,16 +253,26 @@ export function createHyperbridgeService(
     if (started) return;
 
     if (typeof emitter.on === "function") {
-      emitter.on("packet", (packet) => state.pushPacket(normalizePacket(packet)));
-      emitter.on("receipt", (receipt) => state.pushReceipt(normalizePacket(receipt)));
-      emitter.on("error", (error) => logger.error({ err: error }, "Hyperbridge SDK error"));
+      emitter.on("packet", (packet) =>
+        state.pushPacket(normalizePacket(packet))
+      );
+      emitter.on("receipt", (receipt) =>
+        state.pushReceipt(normalizePacket(receipt))
+      );
+      emitter.on("error", (error) =>
+        logger.error({ err: error }, "Hyperbridge SDK error")
+      );
     } else {
-      logger.warn("IndexerClient does not expose EventEmitter hooks, packets will not be cached");
+      logger.warn(
+        "IndexerClient does not expose EventEmitter hooks, packets will not be cached"
+      );
     }
 
     if (typeof emitter.start === "function") {
       await emitter.start();
-    } else if (typeof (indexer as { init?: () => Promise<void> }).init === "function") {
+    } else if (
+      typeof (indexer as { init?: () => Promise<void> }).init === "function"
+    ) {
       await (indexer as { init?: () => Promise<void> }).init!();
     } else {
       logger.info("IndexerClient started implicitly");
@@ -272,4 +301,3 @@ export function createHyperbridgeService(
     assertHex32,
   };
 }
-
