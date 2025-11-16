@@ -137,7 +137,7 @@ export default function ShopSection({ xxUserId }: ShopSectionProps) {
     console.log("[ShopSection] stealthVaultAddress:", stealthVaultAddress);
     console.log("[ShopSection] stealthPublicId:", stealthPublicId);
 
-    if (!canUsePasset || !invoice.invoiceId || !stealthVaultAddress) {
+    if (!canUsePasset || !invoice.invoiceId || !stealthVaultAddress || !invoice.amount) {
       console.log("[ShopSection] Early return - missing requirements");
       return;
     }
