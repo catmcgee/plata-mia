@@ -1,5 +1,6 @@
 import {
   Hex,
+  PublicClient,
   createPublicClient,
   encodeAbiParameters,
   hexToBigInt,
@@ -40,9 +41,7 @@ type HyperbridgeConfig = {
 };
 
 let hyperbridgeConfig: HyperbridgeConfig | undefined;
-let hyperbridgeClient:
-  | ReturnType<typeof createPublicClient<{ chain: undefined; transport: ReturnType<typeof http> }>>
-  | undefined;
+let hyperbridgeClient: PublicClient | undefined;
 
 function getHyperbridgeContext(): HyperbridgeConfig {
   if (hyperbridgeConfig && hyperbridgeClient) {
